@@ -2,8 +2,7 @@
 
 subst W: %CD%
 
-C:
-call ".\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+.\init.bat
 
 W:
 mkdir build

@@ -39,7 +39,7 @@ Win32GetWindowDimension(HWND Window) {
     return Result;
 }
 
-global_variable bool Running;
+global_variable bool GlobalRunning;
 global_variable win32_offscreen_buffer GlobalBackBuffer;
 
 internal void
@@ -90,8 +90,8 @@ Win32DisplayBuffer(HDC DeviceContext, int WindowWidth, int WindowHeight, win32_o
         DeviceContext,
         // X, Y, Width, Height,
         // X, Y, Width, Height,
-        0, 0, Buffer.Width, Buffer.Height,
         0, 0, WindowWidth, WindowHeight,
+        0, 0, Buffer.Width, Buffer.Height,
         Buffer.Memory,
         &Buffer.Info,
         DIB_RGB_COLORS, SRCCOPY
@@ -108,19 +108,17 @@ Win32WindowProc(HWND   Window,
 
     switch(message) {
         case WM_SIZE: {
-            win32_window_dimension Dimension = Win32GetWindowDimension(Window);
-            Win32ResizeDIBSection(&GlobalBackBuffer, Dimension.Width, Dimension.Height);
             OutputDebugStringA("WM_SIZE\n");
         } break;
 
         case WM_DESTROY: {
             // Display a message to the user
-            Running = false;
+            GlobalRunning = false;
         } break;
 
         case WM_CLOSE: {
             // Handle this as an error - recreate window?
-            Running = false;
+            GlobalRunning = false;
         } break;
 
         case WM_ACTIVATEAPP: {
@@ -154,6 +152,9 @@ WinMain(HINSTANCE hInstance,
         LPSTR     lpCmdLine, 
         int       nShowCmd) {
     WNDCLASSEXA wndClass = {0};
+
+    Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
+
     wndClass.cbSize = sizeof(WNDCLASSEXA);
     wndClass.style = CS_OWNDC | CS_CLASSDC | CS_HREDRAW | CS_VREDRAW;
     wndClass.hInstance = hInstance;
@@ -178,13 +179,13 @@ WinMain(HINSTANCE hInstance,
 
         if (window) {
             int XOffset = 0, YOffset = 0;
-            Running = true;
+            GlobalRunning = true;
             
-            while(Running) {
+            while(GlobalRunning) {
                 MSG message;
                 while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
                     if (message.message == WM_QUIT) {
-                        Running = false;
+                        GlobalRunning = false;
                     }
                     TranslateMessage(&message);
                     DispatchMessageA(&message);

@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C++ Debug",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/main.exe", // Path to the compiled executable
+            "args": [], // Arguments to pass to the program (if any)
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": true,
+            // "MIMode": "gdb", // Use "gdb" or "lldb" for Linux/macOS. For Windows, use "windows" with MSVC.
+            "preLaunchTask": "Pre-Debug Task"
+        }
+    ]
+}
