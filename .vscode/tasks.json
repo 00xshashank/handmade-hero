@@ -3,7 +3,7 @@
         {
             "label": "Pre-Debug Task",
             "type": "shell",
-            "command": ".\\init.bat",
+            "command": ".\\build.bat",
             "problemMatcher": [],
             "group": {
                 "kind": "build",

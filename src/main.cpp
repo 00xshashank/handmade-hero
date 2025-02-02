@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <stdint.h>
+#include <Xinput.h>
 
 #define internal static
 #define local_persist static
@@ -14,6 +15,31 @@ typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;
 typedef int64_t int64;
+
+// Check what _In_ and _Out_ mean: Something with the static code analyzer?
+#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE* pState)
+#define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration)
+
+typedef X_INPUT_GET_STATE(X_Input_Get_State);
+typedef X_INPUT_SET_STATE(X_Input_Set_State);
+
+X_INPUT_GET_STATE(X_Input_Get_State_Stub) { return 0; }
+X_INPUT_SET_STATE(X_Input_Set_State_Stub) { return 0; }
+
+global_variable X_Input_Get_State *XInputGetState_ = X_Input_Get_State_Stub;
+global_variable X_Input_Set_State *XInputSetState_ = X_Input_Set_State_Stub;
+
+#define XInputGetState XInputGetState_
+#define XInputSetState XInputSetState_
+
+internal void
+Win32LoadXInput(void) {
+    HMODULE XInputLibrary = LoadLibraryA("xinput1_4.dll");
+    if (XInputLibrary) {
+        XInputGetState = (X_Input_Get_State *) GetProcAddress(XInputLibrary, "XInputGetState");
+        XInputSetState = (X_Input_Set_State *) GetProcAddress(XInputLibrary, "XInputSetState");
+    }
+}
 
 struct win32_offscreen_buffer {
     BITMAPINFO Info;
@@ -85,15 +111,15 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height) {
 }
 
 internal void
-Win32DisplayBuffer(HDC DeviceContext, int WindowWidth, int WindowHeight, win32_offscreen_buffer Buffer, int X, int Y, int Width, int Height) {
+Win32DisplayBuffer(HDC DeviceContext, int WindowWidth, int WindowHeight, win32_offscreen_buffer *Buffer, int X, int Y, int Width, int Height) {
     StretchDIBits(
         DeviceContext,
         // X, Y, Width, Height,
         // X, Y, Width, Height,
         0, 0, WindowWidth, WindowHeight,
-        0, 0, Buffer.Width, Buffer.Height,
-        Buffer.Memory,
-        &Buffer.Info,
+        0, 0, Buffer->Width, Buffer->Height,
+        Buffer->Memory,
+        &Buffer->Info,
         DIB_RGB_COLORS, SRCCOPY
     );
 }
@@ -116,6 +142,23 @@ Win32WindowProc(HWND   Window,
             GlobalRunning = false;
         } break;
 
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP:
+        case WM_KEYDOWN:
+        case WM_KEYUP: {
+            uint32 VKCode = WParam;
+            bool WasDown = ((LParam & (1 << 30)) != 0);
+            bool IsDown = ((LParam & (1 << 31)) != 0);
+            if (WasDown != IsDown) {
+                if (VKCode == VK_UP) {} 
+                else if (VKCode == VK_DOWN) {}
+                else if (VKCode == VK_LEFT) {} 
+                else if (VKCode == VK_RIGHT) {}
+                else if (VKCode == VK_ESCAPE) {}
+                else if (VKCode == VK_SPACE) {}
+            }
+        } break;
+
         case WM_CLOSE: {
             // Handle this as an error - recreate window?
             GlobalRunning = false;
@@ -135,7 +178,7 @@ Win32WindowProc(HWND   Window,
             win32_window_dimension Dimension = Win32GetWindowDimension(Window);
             Win32ResizeDIBSection(&GlobalBackBuffer, Dimension.Width, Dimension.Height);
 
-            Win32DisplayBuffer(DeviceContext, Dimension.Width, Dimension.Height, GlobalBackBuffer, X, Y, Width, Height);
+            Win32DisplayBuffer(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer, X, Y, Width, Height);
             EndPaint(Window, &Paint);
         } break;
 
@@ -152,6 +195,7 @@ WinMain(HINSTANCE hInstance,
         LPSTR     lpCmdLine, 
         int       nShowCmd) {
     WNDCLASSEXA wndClass = {0};
+    Win32LoadXInput();
 
     Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
 
@@ -196,10 +240,50 @@ WinMain(HINSTANCE hInstance,
 
                 win32_window_dimension Dimension = Win32GetWindowDimension(window);
                 
-                Win32DisplayBuffer(DeviceContext, Dimension.Width, Dimension.Height, GlobalBackBuffer, 0, 0, Dimension.Width, Dimension.Height);
+                Win32DisplayBuffer(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer, 0, 0, Dimension.Width, Dimension.Height);
                 ReleaseDC(window, DeviceContext);
 
                 ++XOffset;
+            }
+
+            // Check polling frequency
+            for (DWORD ControllerIndex = 0; ControllerIndex < XUSER_MAX_COUNT; ++ControllerIndex) {
+                    XINPUT_STATE ControllerState;
+                    if (XInputGetState(ControllerIndex, &ControllerState) == ERROR_SUCCESS) {
+                        // This controller is connected.
+                        // See if ControllerState.dwPacketNumber increments too rapidly.
+                        XINPUT_GAMEPAD *Pad = &ControllerState.Gamepad;
+
+                        bool Up = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_UP);
+                        bool Down = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+                        bool Left = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+                        bool Right = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+                        bool Start = (Pad->wButtons & XINPUT_GAMEPAD_START);
+                        bool Back = (Pad->wButtons & XINPUT_GAMEPAD_BACK);
+                        bool LeftShoulder = (Pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
+                        bool RightShoulder = (Pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+                        bool AButton = (Pad->wButtons & XINPUT_GAMEPAD_A);
+                        bool BButton = (Pad->wButtons & XINPUT_GAMEPAD_B);
+                        bool XButton = (Pad->wButtons & XINPUT_GAMEPAD_X);
+                        bool YButton = (Pad->wButtons & XINPUT_GAMEPAD_Y);
+
+                        int StickX = Pad->sThumbLX;
+                        int StickY = Pad->sThumbLY;
+                        /*
+                            Check and change to keyboard and mouse input: 
+                            #include <windows.h>
+
+                            bool Up = GetAsyncKeyState(VK_UP) & 0x8000;
+                            bool Down = GetAsyncKeyState(VK_DOWN) & 0x8000;
+                            bool Left = GetAsyncKeyState(VK_LEFT) & 0x8000;
+                            bool Right = GetAsyncKeyState(VK_RIGHT) & 0x8000;
+                            bool AButton = GetAsyncKeyState('A') & 0x8000;  
+                            bool BButton = GetAsyncKeyState('B') & 0x8000;
+
+                        */
+                    } else {
+                        // This controller is not connected.
+                    }
             }
         } else {
             // TODO: Logging
