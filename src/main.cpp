@@ -2,10 +2,13 @@
 #include <stdint.h>
 #include <Xinput.h>
 #include <dsound.h>
+#include <math.h>
 
 #define internal static
 #define local_persist static
 #define global_variable static
+
+#define Pi32 3.1415927f
 
 typedef uint8_t uint8;
 typedef uint16_t uint16;
@@ -18,6 +21,9 @@ typedef int32_t int32;
 typedef int64_t int64;
 
 typedef int32 bool32;
+
+typedef float real32;
+typedef double real64;
 
 // Check what _In_ and _Out_ mean (_In_opt_, _Outptr_): Something with the static code analyzer?
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE* pState)
@@ -314,12 +320,12 @@ WinMain(HINSTANCE hInstance,
             int ToneVolume = 6000;
             uint32 RunningSampleIndex = 0;
             // int SquareWaveCounter = 0;
-            int SquareWavePeriod = SamplesPerSecond / ToneHz;
-            int HalfSquareWavePeriod = SquareWavePeriod / 2;
+            int WavePeriod = SamplesPerSecond / ToneHz;
+            // int HalfWavePeriod = WavePeriod / 2;
             int SecondaryBufferSize = SamplesPerSecond * BytesPerSample;
 
             Win32InitDSound(window, SamplesPerSecond, SecondaryBufferSize);
-            GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
+            bool32 SoundIsPlaying = false;
             
             GlobalRunning = true;
             while(GlobalRunning) {
@@ -337,10 +343,17 @@ WinMain(HINSTANCE hInstance,
                 // NOTE: DirectSound output test
                 DWORD PlayCursor;
                 DWORD WriteCursor;
-                if(SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor))) {
+                if(!SoundIsPlaying && SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor))) {
                     DWORD ByteToLock = (RunningSampleIndex * BytesPerSample) % SecondaryBufferSize;
                     DWORD BytesToWrite;
-                    if (ByteToLock > PlayCursor) 
+                    // PlayCursor gets updated infrequently, so we may actually end up 
+                    // overwriting the buffer even before the content at that location has 
+                    // been played. Stricter test required here.
+                    if (ByteToLock == PlayCursor) 
+                    {
+                        BytesToWrite = SecondaryBufferSize;
+                    }
+                    else if (ByteToLock > PlayCursor) 
                     {
                         BytesToWrite = SecondaryBufferSize - ByteToLock;
                         BytesToWrite += PlayCursor;
@@ -374,14 +387,13 @@ WinMain(HINSTANCE hInstance,
                             ++SampleIndex
                         ) 
                         {
-                            // if (SquareWaveCounter) 
-                            // {
-                            //     SquareWaveCounter = SquareWavePeriod;
-                            // }
-                            int16 SampleValue = ((RunningSampleIndex++ / HalfSquareWavePeriod) % 2) ? ToneVolume : -ToneVolume;
+                            real32 t = 2.0f * Pi32 * (real32)RunningSampleIndex / (real32)WavePeriod;
+                            real32 SineValue = sinf(t);
+                            int16 SampleValue = (int16)(SineValue * ToneVolume);
                             *SampleOut++ = SampleValue;
                             *SampleOut++ = SampleValue;
-                            // --SquareWaveCounter;
+
+                            ++RunningSampleIndex;
                         }
 
                         SampleOut = (int16*) Region2;
@@ -392,18 +404,22 @@ WinMain(HINSTANCE hInstance,
                             ++SampleIndex
                         ) 
                         {
-                            // if (SquareWaveCounter) 
-                            // {
-                            //     SquareWaveCounter = SquareWavePeriod;
-                            // }
-                            int16 SampleValue = ((RunningSampleIndex++ / HalfSquareWavePeriod) % 2) ? ToneVolume : -ToneVolume;
+                            real32 t = 2.0f * Pi32 * (real32)RunningSampleIndex / (real32)WavePeriod;
+                            real32 SineValue = sinf(t);
+                            int16 SampleValue = (int16)(SineValue * ToneVolume);
                             *SampleOut++ = SampleValue;
                             *SampleOut++ = SampleValue;
-                            // --SquareWaveCounter;
+
+                            ++RunningSampleIndex;
                         }
 
                         GlobalSecondaryBuffer->Unlock(Region1, Region1Size, Region2, Region2Size);
                     }
+                }
+
+                if (!SoundIsPlaying) {
+                    GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
+                    SoundIsPlaying = true;
                 }
 
                 HDC DeviceContext = GetDC(window);

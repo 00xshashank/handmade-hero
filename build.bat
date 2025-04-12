@@ -1,8 +1,6 @@
-@rem @echo off
+@echo off
 
 subst W: %CD%
-
-@rem call "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86
 
 where cl >nul 2>&1 || call "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x86
 
