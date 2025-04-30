@@ -3,6 +3,7 @@
 #include <Xinput.h>
 #include <dsound.h>
 #include <math.h>
+#include <strsafe.h>
 
 #define internal static
 #define local_persist static
@@ -350,6 +351,10 @@ WinMain(HINSTANCE hInstance,
         HINSTANCE hPrevInstance, 
         LPSTR     lpCmdLine, 
         int       nShowCmd) {
+    LARGE_INTEGER PerfCountFrequencyResult;
+    QueryPerformanceFrequency(&PerfCountFrequencyResult);
+    int64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;
+
     WNDCLASSEXA wndClass = {0};
     Win32LoadXInput();
 
@@ -394,8 +399,11 @@ WinMain(HINSTANCE hInstance,
             GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
 
             bool32 SoundIsPlaying = false;
-            
+
             GlobalRunning = true;
+            LARGE_INTEGER LastCounter;
+            QueryPerformanceCounter(&LastCounter);
+
             while(GlobalRunning) {
                 MSG message;
                 while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
@@ -454,6 +462,18 @@ WinMain(HINSTANCE hInstance,
                 ReleaseDC(window, DeviceContext);
 
                 ++XOffset;
+
+                LARGE_INTEGER EndCounter;
+                QueryPerformanceCounter(&EndCounter);
+
+                int64 CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
+                int32 MSPerFrame = (int32) ((1000 * CounterElapsed) / PerfCountFrequency);
+
+                char Buffer[256];
+                StringCbPrintfA(Buffer, sizeof(wchar_t) * 256, "Milliseconds per frame: %d ms.\n", MSPerFrame);
+                // OutputDebugStringA("");
+
+                LastCounter = EndCounter;
             }
 
             // Check polling frequency
