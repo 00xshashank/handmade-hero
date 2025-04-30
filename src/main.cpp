@@ -404,6 +404,8 @@ WinMain(HINSTANCE hInstance,
             LARGE_INTEGER LastCounter;
             QueryPerformanceCounter(&LastCounter);
 
+            int64 LastCycleCount = __rdtsc();            
+
             while(GlobalRunning) {
                 MSG message;
                 while (PeekMessageA(&message, 0, 0, 0, PM_REMOVE)) {
@@ -463,17 +465,23 @@ WinMain(HINSTANCE hInstance,
 
                 ++XOffset;
 
+                int64 EndCycleCount = __rdtsc();
+
                 LARGE_INTEGER EndCounter;
                 QueryPerformanceCounter(&EndCounter);
 
+                int64 CyclesElapsed = EndCycleCount - LastCycleCount;
+                int32 MCPF = (int32) (CyclesElapsed / (1000 * 1000));
                 int64 CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
                 int32 MSPerFrame = (int32) ((1000 * CounterElapsed) / PerfCountFrequency);
+                int32 FPS = PerfCountFrequency / CounterElapsed;
 
-                char Buffer[256];
-                StringCbPrintfA(Buffer, sizeof(wchar_t) * 256, "Milliseconds per frame: %d ms.\n", MSPerFrame);
-                // OutputDebugStringA("");
+                char Buffer[512];
+                StringCbPrintfA(Buffer, sizeof(Buffer) , "%d ms/frame; %d FPS; %d * 10^6 cycles/frame\n", MSPerFrame, FPS, MCPF);
+                OutputDebugStringA(Buffer);
 
                 LastCounter = EndCounter;
+                LastCycleCount = EndCycleCount;
             }
 
             // Check polling frequency
