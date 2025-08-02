@@ -26,6 +26,8 @@ typedef int32 bool32;
 typedef float real32;
 typedef double real64;
 
+#include "handmade.cpp"
+
 // Check what _In_ and _Out_ mean (_In_opt_, _Outptr_): Something with the static code analyzer?
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE* pState)
 #define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration)
@@ -53,22 +55,9 @@ Win32LoadXInput(void) {
     }
 }
 
-struct win32_offscreen_buffer {
-    BITMAPINFO Info;
-    void *Memory;
-    int Width;
-    int Pitch;
-    int Height;
-    int BytesPerPixel;
-};
-
-struct win32_window_dimension {
-    int Width, Height;    
-};
-
-win32_window_dimension 
+game_window_dimension 
 Win32GetWindowDimension(HWND Window) {
-    win32_window_dimension Result;
+    game_window_dimension Result;
 
     RECT ClientRect;
     GetClientRect(Window, &ClientRect);
@@ -78,24 +67,10 @@ Win32GetWindowDimension(HWND Window) {
 }
 
 global_variable bool GlobalRunning;
-global_variable win32_offscreen_buffer GlobalBackBuffer;
+global_variable game_offscreen_buffer GlobalBackBuffer;
 global_variable LPDIRECTSOUNDBUFFER GlobalSecondaryBuffer;
 
-internal void
-RenderGradient(win32_offscreen_buffer *Buffer, int XOffset, int YOffset) {    
-    int8 *Row = (int8 *) Buffer->Memory;
-    for (int Y=0; Y<Buffer->Height; ++Y) {
-        int32 *Pixel = (int32 *) Row;
-        for (int X=0; X<Buffer->Width; ++X) {
-            int8 Blue = (X + XOffset);
-            int8 Green = (Y + YOffset);
-            int8 Red = (X+Y);
 
-            *Pixel++ = ((Red << 16) | (Green << 8) | Blue);          
-        }
-        Row += Buffer->Pitch;
-    }
-}
 
 #define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuidDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter)
 typedef DIRECT_SOUND_CREATE(direct_sound_create);
@@ -172,7 +147,7 @@ Win32InitDSound(HWND Window, int32 SamplesPerSec, int32 BufferSize) {
 }
 
 internal void 
-Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height) {
+Win32ResizeDIBSection(game_offscreen_buffer *Buffer, int Width, int Height) {
     if (Buffer->Memory) {
         // VirtualProtect
         VirtualFree(Buffer->Memory, 0, MEM_RELEASE);
@@ -182,12 +157,12 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height) {
     Buffer->Width = Width;
     Buffer->BytesPerPixel = 4;
 
-    Buffer->Info.bmiHeader.biSize = sizeof(Buffer->Info.bmiHeader);
-    Buffer->Info.bmiHeader.biWidth = Buffer->Width;
-    Buffer->Info.bmiHeader.biHeight = -Buffer->Height;
-    Buffer->Info.bmiHeader.biPlanes = 1;
-    Buffer->Info.bmiHeader.biBitCount = 32;
-    Buffer->Info.bmiHeader.biCompression = BI_RGB;
+    // Buffer->Info.bmiHeader.biSize = sizeof(Buffer->Info.bmiHeader);
+    // Buffer->Info.bmiHeader.biWidth = Buffer->Width;
+    // Buffer->Info.bmiHeader.biHeight = -Buffer->Height;
+    // Buffer->Info.bmiHeader.biPlanes = 1;
+    // Buffer->Info.bmiHeader.biBitCount = 32;
+    // Buffer->Info.bmiHeader.biCompression = BI_RGB;
 
     int BitmapMemorySize = (Buffer->Width * Buffer->Height) * Buffer->BytesPerPixel;
     // HeapAlloc; VirtualAlloc
@@ -198,7 +173,7 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height) {
 }
 
 internal void
-Win32DisplayBuffer(HDC DeviceContext, int WindowWidth, int WindowHeight, win32_offscreen_buffer *Buffer, int X, int Y, int Width, int Height) {
+Win32DisplayBuffer(HDC DeviceContext, int WindowWidth, int WindowHeight, game_offscreen_buffer *Buffer, int X, int Y, int Width, int Height) {
     StretchDIBits(
         DeviceContext,
         // X, Y, Width, Height,
@@ -267,7 +242,7 @@ Win32WindowProc(HWND   Window,
             int Y = Paint.rcPaint.top;
             int Height = Paint.rcPaint.bottom - Paint.rcPaint.top;
             int Width = Paint.rcPaint.right - Paint.rcPaint.left;
-            win32_window_dimension Dimension = Win32GetWindowDimension(Window);
+            game_window_dimension Dimension = Win32GetWindowDimension(Window);
             Win32ResizeDIBSection(&GlobalBackBuffer, Dimension.Width, Dimension.Height);
 
             Win32DisplayBuffer(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer, X, Y, Width, Height);
@@ -416,6 +391,13 @@ WinMain(HINSTANCE hInstance,
                     DispatchMessageA(&message);
                 }
 
+                game_offscreen_buffer BufferCopy = {};
+                BufferCopy.Memory = GlobalBackBuffer.Memory;
+                BufferCopy.Pitch = GlobalBackBuffer.Pitch;
+                BufferCopy.Width = GlobalBackBuffer.Width;
+                BufferCopy.Height = GlobalBackBuffer.Height;
+                GameUpdateAndRender(&BufferCopy);
+
                 RenderGradient(&GlobalBackBuffer, XOffset, YOffset);
 
                 // NOTE: DirectSound output test
@@ -458,7 +440,7 @@ WinMain(HINSTANCE hInstance,
 
                 HDC DeviceContext = GetDC(window);
 
-                win32_window_dimension Dimension = Win32GetWindowDimension(window);
+                game_window_dimension Dimension = Win32GetWindowDimension(window);
                 
                 Win32DisplayBuffer(DeviceContext, Dimension.Width, Dimension.Height, &GlobalBackBuffer, 0, 0, Dimension.Width, Dimension.Height);
                 ReleaseDC(window, DeviceContext);
